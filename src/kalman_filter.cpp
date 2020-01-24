@@ -8,7 +8,9 @@ using Eigen::VectorXd;
  *   VectorXd or MatrixXd objects with zeros upon creation.
  */
 
-KalmanFilter::KalmanFilter() {}
+KalmanFilter::KalmanFilter() {
+	I_ = MatrixXd::Identity(4,4);
+}
 
 KalmanFilter::~KalmanFilter() {}
 
@@ -26,16 +28,42 @@ void KalmanFilter::Predict() {
   /**
    * TODO: predict the state
    */
+  x_ = F_ * x_;
+  P_ = F_ * P_ * F_.transpose() + Q_;
 }
 
 void KalmanFilter::Update(const VectorXd &z) {
   /**
    * TODO: update the state by using Kalman Filter equations
    */
+  VectorXd y = z - H_ * x_;
+  MatrixXd S = H_ * P_ * H_.transpose() + R_;
+  MatrixXd K = P_ * H_.transpose() * S.inverse();
+
+  x_ = x_ + K * y;
+  P_ = (I_ - K * H_) * P_;
 }
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
   /**
    * TODO: update the state by using Extended Kalman Filter equations
    */
+  float rho = sqrt(x_(0)*x_(0) + x_(1)*x_(1));
+  float phi = atan2(x_(1), x_(0));
+  float rhodot = ((x_(0)*x_(2))+(x_(1)*x_(3)))/rho;
+
+  VectorXd h_fn_radar(3);
+  h_fn_radar << rho, phi, rhodot; 	
+  VectorXd y = z - h_fn_radar;               
+  while (y(1)>M_PI){
+  y(1) -= 2*M_PI;
+  }
+  while (y(1)<-M_PI){
+  y(1) += 2*M_PI;
+  }
+  MatrixXd S = H_ * P_ * H_.transpose() + R_;
+  MatrixXd K = P_ * H_.transpose() * S.inverse() ;
+
+  x_ = x_ + K * y;
+  P_ = (I_ - K * H_) * P_;  
 }
