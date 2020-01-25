@@ -1,6 +1,6 @@
 # Extended Kalman Filter Project - Project Writeup
 
-In this project, I have utilized a kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements.The project requires obtaining RMSE values that are lower than the tolerance outlined in the [project rubric.](https://review.udacity.com/#!/rubrics/748/view) 
+In this project, I have utilized a Kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements.The project requires obtaining RMSE values that are lower than the tolerance outlined in the [project rubric.](https://review.udacity.com/#!/rubrics/748/view) 
 
 [//]: # (Image References)
 
