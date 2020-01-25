@@ -1,13 +1,23 @@
-# Extended Kalman Filter Project Starter Code
-Self-Driving Car Engineer Nanodegree Program
+# Extended Kalman Filter Project - Project Writeup
 
-In this project you will utilize a kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements. Passing the project requires obtaining RMSE values that are lower than the tolerance outlined in the project rubric. 
+In this project, I have utilized a kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements.The project requires obtaining RMSE values that are lower than the tolerance outlined in the [project rubric.](https://review.udacity.com/#!/rubrics/748/view) 
 
-This project involves the Term 2 Simulator which can be downloaded [here](https://github.com/udacity/self-driving-car-sim/releases).
+[//]: # (Image References)
 
-This repository includes two files that can be used to set up and install [uWebSocketIO](https://github.com/uWebSockets/uWebSockets) for either Linux or Mac systems. For windows you can use either Docker, VMware, or even [Windows 10 Bash on Ubuntu](https://www.howtogeek.com/249966/how-to-install-and-use-the-linux-bash-shell-on-windows-10/) to install uWebSocketIO. Please see the uWebSocketIO Starter Guide page in the classroom within the EKF Project lesson for the required version and installation scripts.
+[image1]: ./writeup_images/kalman_cartoon_explanation.png "Kalman Filter Explanation Diagram"
+[image2]: ./writeup_images/kalman_equations.png "Kalman Filter Equations"
 
-Once the install for uWebSocketIO is complete, the main program can be built and run by doing the following from the project top directory.
+## To run this code
+
+Installations required:
+* uWebSocketIO
+* Udacity Term-2 Simulator
+* cmake >= 3.5
+* make >= 4.1 (Linux, Mac), 3.81 (Windows)
+* gcc/g++ >= 5.4
+For more information on installation instructions and details refer the [original link](https://github.com/udacity/CarND-Extended-Kalman-Filter-Project/blob/master/README.md) from Udacity.
+
+The project can be built and run by doing the following from the project top directory.
 
 1. mkdir build
 2. cd build
@@ -15,120 +25,81 @@ Once the install for uWebSocketIO is complete, the main program can be built and
 4. make
 5. ./ExtendedKF
 
-Tips for setting up your environment can be found in the classroom lesson for this project.
+## Introduction
+The project objective is to track the x,y position and velocities of a bicycle as observed from a stationary vehicle using Lidar and Radar sensors. The sensor data is fed by a simulator to our main project code through a uWebSocketIO connection.
 
-Note that the programs that need to be written to accomplish the project are src/FusionEKF.cpp, src/FusionEKF.h, kalman_filter.cpp, kalman_filter.h, tools.cpp, and tools.h
+This data is initially stored in the form of a [text file] (data/obj_pose-laser-radar-synthetic-input.txt) with each row representing a measurement from one of these sensors at a different time. The columns contain information such as the sensor type (laser or radar), sensor measurements such as positions and velocities and the corresponding ground truth values. Our main code receives this information from the simulator through the uWebSocketIO connection and processes it using an Extended Kalman Filter to give us a final filtered output to track the bicycle's position and velocity.
 
-The program main.cpp has already been filled out, but feel free to modify it.
+## Description of working of the Extended Kalman Filter
 
-Here is the main protocol that main.cpp uses for uWebSocketIO in communicating with the simulator.
+A Kalman filter is basically an algorithm to estimate the state of a system such as position, orientation, velocity, pressure, temperature, voltage, etc. using a combination of physical laws and measurements. We need the filter since only measurements from sensors are usually noisy and only predictions based on physical laws could be erroneous due to uncertainities. The Kalman filter combines inputs from both these sources using laws of probabilities, based on the uncertainities. 
+
+It is basically a two step process - a predict step followed by an update(or measurement) step, which is repeated cyclically. In the first predict step, the new state(for example, position) is predicted using a known physical law (based on certain assumptions such as constant velocity). The uncertainity in this state is noted down. As a second step, this state is updated based on the actual measurement (say, coming in from a position sensor). During this update step, the position is updated based on the ratio of the uncertainities in both the steps. It is similar to taking a weighted average of two quantities, with the higher weight being assigned to the value with lower uncertainity and a lower weight being assigned to the value with higher uncertainity.  
+
+This ratio which is used for the weighing is called the Kalman gain.
+
+The Kalman filter can be understood with the help of the following diagram.
+![alt text][image1]
+
+These two steps can be implemented using the following two sets of equations:
+![alt text][image2]
+
+where x is the state vector describing the quantity being tracked such as position, velocity, pressure, temperature, voltage, etc.;
+P is the state covariance matrix, indicating the uncertainity in the quantity;
+F is the state transformation matrix, updating the predictions from time to time based on the physical laws;
+Q is the process covariance matrix, consisting of the noise in the process;
+z is the sensor measurement, H is the measurement matrix transforming the state vector to the space of the measurement values;
+R is the uncertainity in the sensor measurement;
+S is the sum of the uncertainities - state covariance and the sensor noise;
+K is the ratio of the uncertainity in predict step(state covariance) with respect to the sum of the uncertainities(prediction + measurement);
+The prime symbol (') is used with x and P to indicate that it is updated after the prediction step.
 
 
-**INPUT**: values provided by the simulator to the c++ program
+In case the prediction and/or measurement steps consist of nonlinearities in place of the linear operations performed by the F and/or H matrix on the state vector x, we need to use an Extended Kalman filter. This is because non-linear transformations on the state vector do not keep the Gaussian/normal assumption valid. The Gaussian assumption is core to the Kalman filter algorithm. In case of such non-linearities, the transformations have to be linearized in the neighborhood of the predicted/measured values. Thus, an Extended Kalman Filter differs from a normal Kalman Filter in the following manner:
 
-["sensor_measurement"] => the measurement that the simulator observed (either lidar or radar)
+a.The H matrix is replaced by its Jacobian matrix Hj when calculating  S, K and P.
+b.The F matrix is replaced by its Jacobian Fj matrix when calculating P'.
+c.x' is calculated using prediction update function, f instead of matrix F.
+d.y is calculated using the function h, instead of matrix H.
 
+In this particular project, the predict step is not affected and will continue to be the same, the measure step for the lidar will also continue to be the same, but the measure step for the radar will use the extended Kalman Filter equations due to non-linear relationship between the measurement z and the state vector x.
 
-**OUTPUT**: values provided by the c++ program to the simulator
+## Brief explanation of key blocks in the code
 
-["estimate_x"] <= kalman filter estimated position x
+The code consists of the following files:
 
-["estimate_y"] <= kalman filter estimated position y
+1. `main.cpp` - This file contains the code to interface with the simulator - to receive the measurement data and ground truths , to supply the algorithm with the measurement values one by one line by line(to the `FusionEKF.cpp`), to call the Kalman filter predict and update steps(in `kalman_filter.cpp`) and receive the Kalman estimated values, to call the Jacobian and performance calculation (`CalculateJacobian`` and `CalculateRMSE` in `tools.cpp`) function and send the estimates and RMSE back to the simulator using the uWebSocketIO connection.
+2. `FusionEKF.h` and `FusionEKF.cpp` - These files contain the header with the class and function definitions and the code for processing the received measurements supplied by the`main.cpp`. This segment of the code checks the type of sensor, initializes the state vector and the other matrices used in the calculation, stores and calculates the time difference between subsequent measurements for use in the prediction step, calls the predict and either the update or updateEKF functions based on the type of sensor (laser/radar) in `kalman_filter.cpp`. It also calls the CalculateJacobian function in `tools.cpp` to assign the Jacobian matrix Hj as H, before the update step, in case the sensor is radar.
+3. `tools.h` and `tools.cpp` - These files contain the class headers and definition for the calculation of the Jacobian of the measurement matrix, Hj and a measure of the error between the Kalman estimate and the ground truth.
+4. `kalman_filter.h` and `kalman_filter.cpp` - These files have the headers and definition for the prediction and update steps. The Kalman filter equations can be found in this segment of the code. There is a common predict step for both the laser and the radar sensors, but a separate measurement update step for each of the laser and the radar sensors. The Update function for the laser sensor uses the normal Kalman update equations, whereas the UpdateEKF function for the radar uses the extended Kalman filter equations, where the H matrix is replaced by the Jacobian Hj matrix for all equations, and the y calculation uses a non-linear h function transforming the cartesian state vector variables to the polar coordinate variables instead of the simple linear transformation using H matrix.
+5. `measurement_package.h` - header file with class definition to store sensor type, timestamp and the actual sensor data.
+6. `json.hpp` - for communication with the Udacity Unity simulator.
+7. `Eigen` library - for vector and matrix operations.
 
-["rmse_x"]
+The items 1, 5, 6 and 7 are not modified and are used directly, while the code in 2,3 and 4 has been significantly modified and filled in to program the Kalman filter and measure the performance. 
 
-["rmse_y"]
-
-["rmse_vx"]
-
-["rmse_vy"]
 
 ---
 
-## Other Important Dependencies
+## Project Requirements in the Project Rubric
+Here, in this section I mention the project requirements given in the project rubric, all of which have been met.
 
-* cmake >= 3.5
-  * All OSes: [click here for installation instructions](https://cmake.org/install/)
-* make >= 4.1 (Linux, Mac), 3.81 (Windows)
-  * Linux: make is installed by default on most Linux distros
-  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
-  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
-* gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools](https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
+### Compiling
+The code compiles using cmake and make without errors.
 
-## Basic Build Instructions
+### Accuracy
+px, py, vx, vy output coordinates have an RMSE <= [.11, .11, 0.52, 0.52] when using the file: "obj_pose-laser-radar-synthetic-input.txt", which is the same as the data file the simulator uses for Dataset 1.
 
-1. Clone this repo.
-2. Make a build directory: `mkdir build && cd build`
-3. Compile: `cmake .. && make` 
-   * On windows, you may need to run: `cmake .. -G "Unix Makefiles" && make`
-4. Run it: `./ExtendedKF `
+### Correct Algorithm
 
-## Editor Settings
+#### Flow 
+The Sensor Fusion algorithm used here follows the general processing flow of first initializing the state vectors and matrices, then predicting the state based on the time that has passed by till the next incoming measurement, and finally updating the state using measurements. This goes on in a cyclic manner of prediction and updation.
+#### First measurements
+The code uses the first measurements to initialize the state vectors and covariance matrices.
+#### Sequence - Predict, then Update
+After the first measurement to initialize the vectors and matrices, for every subsequent measurement, the algorithm used in the code predicts the object position to the current timestep and then updates the prediction using the new measurement.
+#### Handle both radar and lidar
+The algorithm used here sets up the appropriate matrices (such as H and Hj) based on the incoming type of measurement (such as laser and radar) and calls the correct measurement function (such as Update and UpdateEKF) for the given sensor type.
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
-
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
-
-## Code Style
-
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
-
-## Generating Additional Data
-
-This is optional!
-
-If you'd like to generate your own radar and lidar data, see the
-[utilities repo](https://github.com/udacity/CarND-Mercedes-SF-Utilities) for
-Matlab scripts that can generate additional data.
-
-## Project Instructions and Rubric
-
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
-
-More information is only accessible by people who are already enrolled in Term 2 (three-term version) or Term 1 (two-term version)
-of CarND. If you are enrolled, see the Project Resources page in the classroom
-for instructions and the project rubric.
-
-## Hints and Tips!
-
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
-* Students have reported rapid expansion of log files when using the term 2 simulator.  This appears to be associated with not being connected to uWebSockets.  If this does occur,  please make sure you are conneted to uWebSockets. The following workaround may also be effective at preventing large log files.
-
-    + create an empty log file
-    + remove write permissions so that the simulator can't write to log
- * Please note that the ```Eigen``` library does not initialize ```VectorXd``` or ```MatrixXd``` objects with zeros upon creation.
-
-## Call for IDE Profiles Pull Requests
-
-Help your fellow students!
-
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to ensure
-that students don't feel pressured to use one IDE or another.
-
-However! We'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Regardless of the IDE used, every submitted project must
-still be compilable with cmake and make.
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+### Code Efficiency
+The code is written keeping in mind efficiency as a key criteria without necessarily sacrificing comprehension, stability, robustness or security for speed. For example, I have tried to avoid running the exact same calculation repeatedly, wherever I could run it once, store and reuse. I would appreciate your feedback on improving the code efficiency and style, since I am a beginner and wish to upgrade my skills.
